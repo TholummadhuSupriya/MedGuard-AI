@@ -1,0 +1,8 @@
+input_name,expected_generic,case_type
+Glucophage,metformin,brand
+Advil,ibuprofen,brand
+Coumadin,warfarin,brand
+Plavix,clopidogrel,brand
+ibuprofn,ibuprofen,misspelling
+metformn,metformin,misspelling
+Lantus,insulin glargine,brand

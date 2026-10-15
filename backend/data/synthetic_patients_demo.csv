@@ -1,0 +1,13 @@
+patient_id,age,weight_kg,egfr,pregnancy_status,department,diagnoses,current_medications,is_synthetic
+SYN001,68,74,48,not_applicable,Cardiology,atrial_fibrillation;hypertension,warfarin;ibuprofen,True
+SYN002,59,81,76,not_applicable,General Medicine,hypertension,lisinopril;potassium chloride,True
+SYN003,71,67,55,not_applicable,Cardiology,coronary_artery_disease,aspirin;warfarin,True
+SYN004,46,69,98,not_applicable,General Medicine,type_2_diabetes,metformin;atorvastatin,True
+SYN005,52,90,84,not_applicable,Endocrinology,type_2_diabetes,metformin;glipizide,True
+SYN006,34,62,110,unknown,General Medicine,infection,amoxicillin;acetaminophen,True
+SYN007,63,73,66,not_applicable,Cardiology,coronary_artery_disease,clopidogrel;omeprazole,True
+SYN008,57,77,43,not_applicable,General Medicine,fungal_infection;atrial_fibrillation,fluconazole;warfarin,True
+SYN009,29,58,105,unknown,General Medicine,pain,acetaminophen,True
+SYN010,66,83,61,not_applicable,Endocrinology,type_2_diabetes;hypertension,metformin;lisinopril,True
+SYN011,74,71,39,not_applicable,General Medicine,type_2_diabetes;chronic_kidney_disease,metformin;ibuprofen,True
+SYN012,42,64,101,unknown,General Medicine,migraine,ibuprofn;omeprazole,True

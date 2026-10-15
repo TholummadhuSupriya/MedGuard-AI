@@ -1,0 +1,6 @@
+interaction_id,drug_a,drug_b,demo_severity,demo_alert_type,demo_action,evidence_status
+INT001,warfarin,ibuprofen,high,drug_interaction,Request prescriber/pharmacist review of bleeding risk and alternatives.,Illustrative demo rule; verify against authoritative source
+INT002,warfarin,aspirin,high,drug_interaction,Request review of combined antithrombotic therapy and bleeding risk.,Illustrative demo rule; verify against authoritative source
+INT003,lisinopril,potassium chloride,moderate,drug_interaction,Review potassium monitoring and patient-specific risk.,Illustrative demo rule; verify against authoritative source
+INT004,clopidogrel,omeprazole,moderate,drug_interaction,Ask prescriber/pharmacist to review the combination and local guidance.,Illustrative demo rule; verify against authoritative source
+INT005,fluconazole,warfarin,high,drug_interaction,Request prompt review of interaction risk and monitoring needs.,Illustrative demo rule; verify against authoritative source

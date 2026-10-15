@@ -1,0 +1,8 @@
+case_id,patient_id,issue_type,drug_a,drug_b,ground_truth_issue,severity_label,is_near_miss,note
+CASE001,SYN001,drug_interaction,warfarin,ibuprofen,1,high,1,Synthetic teaching label; not clinically validated
+CASE002,SYN002,drug_interaction,lisinopril,potassium chloride,1,moderate,0,Synthetic teaching label; not clinically validated
+CASE003,SYN003,drug_interaction,warfarin,aspirin,1,high,1,Synthetic teaching label; not clinically validated
+CASE004,SYN004,drug_interaction,metformin,atorvastatin,0,none,0,Synthetic teaching label; not clinically validated
+CASE005,SYN007,drug_interaction,clopidogrel,omeprazole,1,moderate,1,Synthetic teaching label; not clinically validated
+CASE006,SYN008,drug_interaction,fluconazole,warfarin,1,high,1,Synthetic teaching label; not clinically validated
+CASE007,SYN009,drug_interaction,acetaminophen,omeprazole,0,none,0,Synthetic teaching label; not clinically validated

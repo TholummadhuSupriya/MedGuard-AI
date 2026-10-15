@@ -1,0 +1,16 @@
+medication_id,generic_name,brand_names,drug_class,renal_review_required,pregnancy_info,demo_note
+MED001,metformin,Glucophage;Fortamet,biguanide,True,Not assessed in demo,Synthetic reference row; not clinical guidance
+MED002,ibuprofen,Advil;Motrin,NSAID,True,Not assessed in demo,Synthetic reference row; not clinical guidance
+MED003,warfarin,Coumadin;Jantoven,anticoagulant,False,Not assessed in demo,Synthetic reference row; not clinical guidance
+MED004,aspirin,Bayer;Ecotrin,antiplatelet/NSAID,False,Not assessed in demo,Synthetic reference row; not clinical guidance
+MED005,lisinopril,Zestril;Prinivil,ACE inhibitor,True,Not assessed in demo,Synthetic reference row; not clinical guidance
+MED006,potassium chloride,Klor-Con;K-Tab,electrolyte supplement,True,Not assessed in demo,Synthetic reference row; not clinical guidance
+MED007,atorvastatin,Lipitor,statin,False,Not assessed in demo,Synthetic reference row; not clinical guidance
+MED008,amoxicillin,Amoxil;Trimox,antibiotic,True,Not assessed in demo,Synthetic reference row; not clinical guidance
+MED009,clopidogrel,Plavix,antiplatelet,False,Not assessed in demo,Synthetic reference row; not clinical guidance
+MED010,fluconazole,Diflucan,antifungal,True,Not assessed in demo,Synthetic reference row; not clinical guidance
+MED011,insulin glargine,Lantus;Basaglar,insulin,False,Not assessed in demo,Synthetic reference row; not clinical guidance
+MED012,glipizide,Glucotrol,sulfonylurea,True,Not assessed in demo,Synthetic reference row; not clinical guidance
+MED013,omeprazole,Prilosec;Losec,proton pump inhibitor,False,Not assessed in demo,Synthetic reference row; not clinical guidance
+MED014,acetaminophen,Tylenol;Panadol,analgesic,False,Not assessed in demo,Synthetic reference row; not clinical guidance
+MED015,simvastatin,Zocor,statin,False,Not assessed in demo,Synthetic reference row; not clinical guidance

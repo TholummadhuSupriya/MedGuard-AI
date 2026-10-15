@@ -1,0 +1,29 @@
+
+# Frontend dependencies and builds
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+dist-ssr/
+
+# Python virtual environment
+backend/.venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Secrets and environment variables
+.env
+.env.*
+!.env.example
+
+# Local database
+backend/medguard_demo.db
+
+# Logs and editor files
+*.log
+.vscode/
+.idea/
+.DS_Store
