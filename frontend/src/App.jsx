@@ -1142,7 +1142,7 @@ async function runSafetyCheck(event) {
   if (!isAuthenticated) {
     return (
       <div className="mg-app">
-        <main className="mg-main-area" style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: "24px" }}>
+        <main className="mg-main-area" style={{ minHeight: "100vh", width: "100%", maxWidth: "100%", margin: 0, flex: "1 1 100%", display: "grid", placeItems: "center", padding: "24px", boxSizing: "border-box" }}>
           <section className="mg-panel" style={{ width: "min(100%, 440px)", padding: "32px" }}>
             <div className="mg-brand" style={{ marginBottom: "24px" }}>
               <div className="mg-brand-mark">M</div>
