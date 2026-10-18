@@ -27,3 +27,7 @@ backend/medguard_demo.db
 .vscode/
 .idea/
 .DS_Store
+
+# Local backup files
+*.backup
+*.bak

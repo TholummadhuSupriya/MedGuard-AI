@@ -10,7 +10,8 @@ import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
+from auth_demo import allow_roles
 from pydantic import BaseModel, Field
 
 DB_PATH = Path(__file__).resolve().parent / "medguard_demo.db"
@@ -73,7 +74,10 @@ class TokenRequest(BaseModel):
 
 
 @router.post("/references")
-def create_reference(body: CreateReference):
+def create_reference(
+    body: CreateReference,
+    staff: dict = Depends(allow_roles("doctor", "nurse", "admin")),
+):
     token = secrets.token_urlsafe(32)
     now = _now()
     expires = now + timedelta(hours=body.expires_in_hours)
@@ -99,7 +103,12 @@ def create_reference(body: CreateReference):
 
 
 @router.post("/resolve")
-def resolve_reference(body: TokenRequest):
+def resolve_reference(
+    body: TokenRequest,
+    staff: dict = Depends(
+        allow_roles("doctor", "nurse", "pharmacist", "admin")
+    ),
+):
     now = _now()
     with _connect() as conn:
         row = conn.execute(
@@ -133,7 +142,10 @@ def resolve_reference(body: TokenRequest):
 
 
 @router.post("/revoke")
-def revoke_reference(body: TokenRequest):
+def revoke_reference(
+    body: TokenRequest,
+    staff: dict = Depends(allow_roles("doctor", "admin")),
+):
     now = _now().isoformat()
     with _connect() as conn:
         row = conn.execute(
@@ -155,7 +167,10 @@ def revoke_reference(body: TokenRequest):
 
 
 @router.get("/audit")
-def list_qr_audit(limit: int = Query(default=50, ge=1, le=200)):
+def list_qr_audit(
+    limit: int = Query(default=50, ge=1, le=200),
+    staff: dict = Depends(allow_roles("admin")),
+):
     """Demo-only audit view. Production deployments must protect this endpoint with staff auth."""
     with _connect() as conn:
         rows = conn.execute(
@@ -167,5 +182,5 @@ def list_qr_audit(limit: int = Query(default=50, ge=1, le=200)):
         "items": [dict(row) for row in rows],
         "count": len(rows),
         "synthetic_demo_only": True,
-        "warning": "Unprotected demo endpoint. Add staff authentication and authorization before any real deployment.",
+        "warning": "Admin-protected endpoint",
     }

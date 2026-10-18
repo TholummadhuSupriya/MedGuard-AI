@@ -20,6 +20,10 @@ security = HTTPBearer(
     scheme_name="BearerAuth",
     description="Enter your MedGuard staff access token"
 )
+from dotenv import load_dotenv
+from pathlib import Path
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
 router = APIRouter(prefix="/api/auth", tags=["Demo staff authentication"])
 
 # Configure these environment variables before enabling authentication.

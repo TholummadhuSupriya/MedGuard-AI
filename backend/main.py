@@ -1,19 +1,25 @@
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer
 from pydantic import BaseModel, Field
 from typing import List
 
 from safety_engine_demo import check_medication_list
+from clinical_extensions import (
+    router as clinical_extensions_router,
+    initialize_clinical_extensions,
+)
 from database_demo import (
     router as database_demo_router,
     initialize_database,
 )
-from auth_demo import router as auth_router
-from fastapi import Depends
+from analytics_demo import (
+    router as analytics_router,
+    initialize_analytics_table,
+    record_safety_check,
+)
 from auth_demo import router as auth_router, allow_roles
-from fastapi.security import HTTPBearer
-
 
 security = HTTPBearer()
 app = FastAPI(
@@ -24,9 +30,17 @@ app = FastAPI(
 
 app.include_router(auth_router)
 initialize_database()
+initialize_clinical_extensions()
+app.include_router(clinical_extensions_router)
 app.include_router(database_demo_router)
 
-from qr_access_audit_demo import router as qr_router, initialize_qr_table
+initialize_analytics_table()
+app.include_router(analytics_router)
+
+from qr_access_audit_demo import (
+    router as qr_router,
+    initialize_qr_table,
+)
 
 initialize_qr_table()
 app.include_router(qr_router)
@@ -105,10 +119,11 @@ def run_safety_check(request: SafetyCheckRequest, staff: dict = Depends(allow_ro
     ]
 
     if not medications:
-        from fastapi import HTTPException
         raise HTTPException(
             status_code=422,
             detail="Provide at least one medication name."
         )
 
-    return check_medication_list(medications)
+    result = check_medication_list(medications)
+    record_safety_check(result)
+    return result

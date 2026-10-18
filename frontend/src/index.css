@@ -10,14 +10,13 @@ body,
 #root {
   width: 100%;
   min-width: 320px;
-  min-height: 100%;
   margin: 0;
   padding: 0;
 }
 
 body {
   text-align: left;
-  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  min-height: 100vh 
 }
 
 button,

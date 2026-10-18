@@ -8,7 +8,7 @@ import "./App.css";
 
 
 
-const API = "http://127.0.0.1:8000";
+const API = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
 // Attach the current staff bearer token to protected API requests.
 async function apiFetch(input, options = {}) {
@@ -40,6 +40,20 @@ function App() {
   const [loginBusy, setLoginBusy] = useState(false);
 
   const [patients, setPatients] = useState([]);
+  const [navSearch, setNavSearch] = useState("");
+  const [analytics, setAnalytics] = useState(null);
+const [analyticsError, setAnalyticsError] = useState("");
+const [clinicalCurrent, setClinicalCurrent] = useState("");
+const [clinicalProposed, setClinicalProposed] = useState("");
+const [clinicalPatientId, setClinicalPatientId] = useState("");
+const [clinicalAge, setClinicalAge] = useState("");
+const [clinicalEgfr, setClinicalEgfr] = useState("");
+const [clinicalPregnancy, setClinicalPregnancy] = useState("");
+const [clinicalResult, setClinicalResult] = useState(null);
+const [clinicalBusy, setClinicalBusy] = useState(false);
+const [clinicalError, setClinicalError] = useState("");
+const [clinicalDepartments, setClinicalDepartments] = useState([]);
+const [clinicalEvaluation, setClinicalEvaluation] = useState(null);
 
 
 
@@ -48,7 +62,6 @@ function App() {
 
 
   const [search, setSearch] = useState("");
-  const [navSearch, setNavSearch] = useState("");
 
 
 
@@ -112,6 +125,8 @@ function App() {
     event.preventDefault();
     setLoginBusy(true);
     setLoginError("");
+    setError("");
+    setLoading(true);
     try {
       const response = await fetch(`${API}/api/auth/login`, {
         method: "POST",
@@ -125,6 +140,7 @@ function App() {
       setIsAuthenticated(true);
       setLoginPassword("");
     } catch (err) {
+      setLoading(false);
       setLoginError(err.message || "Unable to log in.");
     } finally {
       setLoginBusy(false);
@@ -140,11 +156,45 @@ function App() {
   }
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      setLoading(false);
-      setPatients([]);
-      return undefined;
+  if (!isAuthenticated) return undefined;
+
+  let cancelled = false;
+
+  async function loadAnalytics() {
+    try {
+      const response = await apiFetch("/api/analytics/summary");
+
+      if (!response.ok) {
+        throw new Error(`Analytics API failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!cancelled) {
+        setAnalytics(data);
+        setAnalyticsError("");
+      }
+    } catch (err) {
+      if (!cancelled) {
+        setAnalyticsError(
+          err.message || "Unable to load analytics."
+        );
+      }
     }
+  }
+
+  loadAnalytics();
+
+  return () => {
+    cancelled = true;
+  };
+}, [isAuthenticated]);
+
+  useEffect(() => {
+    // Do not update React state synchronously inside an effect.
+    // The login screen is rendered while unauthenticated; patient loading
+    // starts only after a successful login.
+    if (!isAuthenticated) return undefined;
 
     let cancelled = false;
 
@@ -286,15 +336,12 @@ const payload = await response.json();
       };
 
       setSelected(normalized);
-
       setPage("patients");
-
-    } catch {
-
-      setError("Unable to retrieve this SQLite demo patient record. Check the /api/db/patients/{id}/history endpoint.");
-
+      return true;
+    } catch (err) {
+      setError(err?.message || "Unable to retrieve this SQLite demo patient record. Check the /api/db/patients/{id}/history endpoint.");
+      return false;
     }
-
   }
 
 
@@ -503,10 +550,11 @@ async function resolveQrReference(event) {
 
     if (!response.ok) throw new Error(payload?.detail || "Reference is invalid, expired or revoked.");
 
+    const opened = await openPatient(payload.patient_id);
+    if (!opened) {
+      throw new Error("The reference is valid, but the patient history could not be loaded.");
+    }
     setQrPatientId(payload.patient_id);
-
-    await openPatient(payload.patient_id);
-
     setQrMessage(`Reference resolved. Loaded ${payload.patient_id}; continue reviewing the synthetic patient history.`);
 
   } catch (err) {
@@ -856,6 +904,16 @@ async function runSafetyCheck(event) {
 
 
     setSafetyResult(data);
+    // Refresh aggregate dashboard metrics after recording a safety check.
+    try {
+      const analyticsResponse = await apiFetch("/api/analytics/summary");
+      if (analyticsResponse.ok) {
+        setAnalytics(await analyticsResponse.json());
+        setAnalyticsError("");
+      }
+    } catch {
+      // The safety result remains available even if analytics refresh fails.
+    }
 
 
 
@@ -931,6 +989,7 @@ async function runSafetyCheck(event) {
 
 
 
+    { id: "clinical", icon: "⚕", label: "Clinical tools" },
     { id: "access", icon: "▣", label: "QR & identity access" },
 
 
@@ -940,229 +999,126 @@ async function runSafetyCheck(event) {
 
 
   const metrics = [
-
-
-
     {
-
-
-
       label: "Patients loaded",
-
-
-
       value: String(patients.length),
-
-
-
       note: "Demo records from backend",
-
-
-
       tone: "purple",
-
-
-
     },
-
-
-
     {
-
-
-
-      label: "Patient record",
-
-
-
-      value: selected ? "1" : "0",
-
-
-
-      note: "Currently selected",
-
-
-
+      label: "Safety checks",
+      value: String(analytics?.total_checks ?? 0),
+      note: "Recorded in local SQLite",
       tone: "blue",
-
-
-
     },
-
-
-
     {
-
-
-
-      label: "Safety evaluation",
-
-
-
-      value: "Pending",
-
-
-
-      note: "Demo API connected",
-
-
-
+      label: "High-severity alerts",
+      value: String(analytics?.high_alerts ?? 0),
+      note: "Last 7 days",
       tone: "neutral",
-
-
-
     },
-
-
-
     {
-
-
-
-      label: "Drug name review",
-
-
-
-      value: "Pending",
-
-
-
-      note: "Exact demo lookup available",
-
-
-
+      label: "Review alerts",
+      value: String(analytics?.review_alerts ?? 0),
+      note: "Last 7 days",
       tone: "neutral",
-
-
-
     },
-
-
-
     {
-
-
-
-      label: "Interaction checks",
-
-
-
-      value: "—",
-
-
-
-      note: "Synthetic interaction table",
-
-
-
+      label: "Duplicate ingredients",
+      value: String(analytics?.duplicate_alerts ?? 0),
+      note: "Last 7 days",
       tone: "neutral",
-
-
-
     },
-
-
-
     {
-
-
-
-      label: "Renal dose checks",
-
-
-
-      value: "—",
-
-
-
-      note: "Awaiting supported rules",
-
-
-
+      label: "Unresolved names",
+      value: String(analytics?.unresolved_names ?? 0),
+      note: "Last 7 days",
       tone: "neutral",
-
-
-
     },
-
-
-
-    {
-
-
-
-      label: "QR record access",
-
-
-
-      value: "Planned",
-
-
-
-      note: "Not enabled yet",
-
-
-
-      tone: "neutral",
-
-
-
-    },
-
-
-
-    {
-
-
-
-      label: "Cloud visit uploads",
-
-
-
-      value: "Planned",
-
-
-
-      note: "Not enabled yet",
-
-
-
-      tone: "neutral",
-
-
-
-    },
-
-
-
   ];
-
-
 
   if (!isAuthenticated) {
     return (
-      <div className="mg-app">
-        <main className="mg-main-area" style={{ minHeight: "100vh", width: "100%", maxWidth: "100%", margin: 0, flex: "1 1 100%", display: "grid", placeItems: "center", padding: "24px", boxSizing: "border-box" }}>
-          <section className="mg-panel" style={{ width: "min(100%, 440px)", padding: "32px" }}>
-            <div className="mg-brand" style={{ marginBottom: "24px" }}>
-              <div className="mg-brand-mark">M</div>
-              <div><strong>MedGuard AI</strong><span>Medication safety</span></div>
+      <div className="mg-login-screen">
+        <section className="mg-login-card">
+          <div className="mg-brand mg-login-brand">
+            <div className="mg-brand-mark">M</div>
+            <div>
+              <strong>MedGuard AI</strong>
+              <span>Medication safety</span>
             </div>
-            <h1 style={{ marginBottom: "8px" }}>Staff sign in</h1>
-            <p style={{ marginBottom: "24px" }}>Sign in with your configured demo staff account.</p>
-            <form className="mg-visit-form" onSubmit={handleLogin}>
-              <label htmlFor="mg-login-username">Username</label>
-              <input id="mg-login-username" value={loginUsername} onChange={(event) => setLoginUsername(event.target.value)} autoComplete="username" required />
-              <label htmlFor="mg-login-password">Password</label>
-              <input id="mg-login-password" type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} autoComplete="current-password" required />
-              {loginError && <div className="mg-error" role="alert">{loginError}</div>}
-              <button className="mg-primary-button" type="submit" disabled={loginBusy}>{loginBusy ? "Signing in…" : "Sign in"}</button>
-            </form>
-            <p className="mg-safety-note" style={{ marginTop: "20px" }}>Synthetic local demo only. Use the credentials configured in your backend environment.</p>
-          </section>
-        </main>
+          </div>
+
+          <div className="mg-login-heading">
+            <p className="mg-eyebrow">SECURE STAFF ACCESS</p>
+            <h1>Welcome back</h1>
+            <p>Sign in to access your medication safety dashboard.</p>
+          </div>
+
+          <form className="mg-visit-form mg-login-form" onSubmit={handleLogin}>
+            <label htmlFor="mg-login-username">Username</label>
+            <input
+              id="mg-login-username"
+              type="text"
+              value={loginUsername}
+              onChange={(event) => setLoginUsername(event.target.value)}
+              autoComplete="username"
+              placeholder="Enter your username"
+              required
+              disabled={loginBusy}
+            />
+
+            <label htmlFor="mg-login-password">Password</label>
+            <input
+              id="mg-login-password"
+              type="password"
+              value={loginPassword}
+              onChange={(event) => setLoginPassword(event.target.value)}
+              autoComplete="current-password"
+              placeholder="Enter your password"
+              required
+              disabled={loginBusy}
+            />
+
+            {loginError && (
+              <div className="mg-error" role="alert">
+                {loginError}
+              </div>
+            )}
+
+            <button
+              className="mg-primary-button mg-login-button"
+              type="submit"
+              disabled={loginBusy}
+            >
+              {loginBusy ? "Signing in..." : "Sign in"}
+            </button>
+          </form>
+
+          <div className="mg-login-footer">
+            <span className="mg-status-dot" />
+            <p>Local demo environment. Synthetic patient data only.</p>
+          </div>
+        </section>
       </div>
     );
+  }
+
+
+
+  async function runClinicalReconciliation(event) {
+    event.preventDefault();setClinicalBusy(true);setClinicalError("");setClinicalResult(null);
+    try {const r=await apiFetch("/api/extensions/reconcile",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({patient_id:clinicalPatientId||selected?.id||null,current_medications:clinicalCurrent.split(/\n|,|;/).map(x=>x.trim()).filter(Boolean),proposed_medications:clinicalProposed.split(/\n|,|;/).map(x=>x.trim()).filter(Boolean)})});const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.detail||`Reconciliation failed (${r.status}).`);setClinicalResult({type:"reconciliation",data:d});}catch(e){setClinicalError(e.message||"Reconciliation failed.");}finally{setClinicalBusy(false);}
+  }
+  async function runClinicalContextReview(event) {
+    event.preventDefault();setClinicalBusy(true);setClinicalError("");setClinicalResult(null);
+    try {const r=await apiFetch("/api/extensions/context-review",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({patient_id:clinicalPatientId||selected?.id||null,medications:clinicalProposed.split(/\n|,|;/).map(x=>x.trim()).filter(Boolean),age:clinicalAge===""?null:Number(clinicalAge),egfr:clinicalEgfr===""?null:Number(clinicalEgfr),pregnancy_status:clinicalPregnancy||null})});const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.detail||`Context review failed (${r.status}).`);setClinicalResult({type:"context",data:d});}catch(e){setClinicalError(e.message||"Context review failed.");}finally{setClinicalBusy(false);}
+  }
+  async function loadClinicalDepartments() {
+    setClinicalBusy(true);setClinicalError("");try{const r=await apiFetch("/api/extensions/departments");const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.detail||`Departments failed (${r.status}).`);setClinicalDepartments(d?.departments||[]);}catch(e){setClinicalError(e.message||"Could not load departments.");}finally{setClinicalBusy(false);}
+  }
+  async function runClinicalEvaluation() {
+    setClinicalBusy(true);setClinicalError("");setClinicalEvaluation(null);try{const r=await apiFetch("/api/extensions/evaluation/run",{method:"POST"});const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.detail||`Evaluation failed (${r.status}).`);setClinicalEvaluation(d);}catch(e){setClinicalError(e.message||"Evaluation failed.");}finally{setClinicalBusy(false);}
   }
 
   return (
@@ -1205,28 +1161,18 @@ async function runSafetyCheck(event) {
 
 
 
-        <div className="mg-side-search">
-          <span aria-hidden="true">⌕</span>
-          <input
-            type="text"
-            placeholder="Filter navigation..."
-            aria-label="Filter navigation"
-            style={{ flex: 1, minWidth: 0, background: "transparent", border: 0, outline: "none", color: "inherit", font: "inherit" }}
-            value={navSearch}
-            onChange={(event) => setNavSearch(event.target.value)}
-          />
-          {navSearch && (
-            <button
-              type="button"
-              className="mg-nav-search-clear"
-              style={{ background: "transparent", border: 0, color: "inherit", cursor: "pointer", fontSize: "20px" }}
-              aria-label="Clear navigation filter"
-              onClick={() => setNavSearch("")}
-            >
-              ×
-            </button>
-          )}
-        </div>
+
+          <div className="mg-side-search">
+            <span>⌕</span>
+            <input
+              type="text"
+              placeholder="Filter navigation..."
+              aria-label="Filter navigation"
+              value={navSearch}
+              onChange={(event) => setNavSearch(event.target.value)}
+            />
+          </div>
+
 
 
 
@@ -1238,11 +1184,7 @@ async function runSafetyCheck(event) {
 
 
 
-          {navItems
-            .filter((item) =>
-              item.label.toLowerCase().includes(navSearch.trim().toLowerCase())
-            )
-            .map((item) => (
+          {navItems.map((item) => (
 
 
 
@@ -1455,7 +1397,7 @@ async function runSafetyCheck(event) {
 
 
 
-                      : "QR & Identity Access"}
+                      : page === "clinical" ? "Clinical Workflow Tools" : page === "clinical" ? "Clinical Workflow Tools" : "QR & Identity Access"}
 
 
 
@@ -1653,7 +1595,74 @@ async function runSafetyCheck(event) {
 
               </section>
 
+              <section className="mg-panel mg-analytics-panel">
+                <div className="mg-panel-heading">
+                  <div>
+                    <h2>Safety activity</h2>
+                    <p>Medication checks recorded during the last seven days.</p>
+                  </div>
+                  <span className="mg-outline-tag">SQLite analytics</span>
+                </div>
 
+                {analyticsError && <div className="mg-error" role="alert">{analyticsError}</div>}
+
+                {analytics ? (
+                  <>
+                    <div className="mg-analytics-chart" role="img" aria-label="Medication safety checks by day for the last seven days">
+                      {analytics.daily_activity.map((day) => {
+                        const maxChecks = Math.max(1, ...analytics.daily_activity.map((item) => item.checks));
+                        const height = day.checks > 0 ? Math.max(8, (day.checks / maxChecks) * 100) : 0;
+                        return (
+                          <div className="mg-analytics-day" key={day.date}>
+                            <strong>{day.checks}</strong>
+                            <div className="mg-analytics-bar-track">
+                              <div
+                                className="mg-analytics-bar"
+                                style={{ height: `${height}%` }}
+                                title={`${day.date}: ${day.checks} checks`}
+                              />
+                            </div>
+                            <span>{new Date(`${day.date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short" })}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <p className="mg-analytics-caption">
+                      All-time checks: {analytics.total_checks}. Alert and unresolved-name totals above cover the last seven days.
+                    </p>
+
+                    <h3>Recent safety checks</h3>
+                    {analytics.recent_activity?.length ? (
+                      <div className="mg-table-wrap">
+                        <table className="mg-patient-table">
+                          <thead>
+                            <tr>
+                              <th>Time</th><th>Alerts</th><th>High</th><th>Review</th><th>Duplicates</th><th>Unresolved</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {analytics.recent_activity.map((item, index) => (
+                              <tr key={`${item.created_at}-${index}`}>
+                                <td>{new Date(item.created_at).toLocaleString()}</td>
+                                <td>{item.alert_count}</td>
+                                <td>{item.high_alert_count}</td>
+                                <td>{item.review_alert_count}</td>
+                                <td>{item.duplicate_alert_count}</td>
+                                <td>{item.unresolved_count}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="mg-empty-text">No safety checks have been recorded yet. Run a prescription review to populate analytics.</p>
+                    )}
+                  </>
+                ) : (
+                  !analyticsError && <p className="mg-empty-text">Loading analytics…</p>
+                )}
+              </section>
 
               <section className="mg-lower-grid">
 
@@ -3403,6 +3412,26 @@ async function runSafetyCheck(event) {
 
 
 
+          
+          {page === "clinical" && (
+            <section className="mg-panel mg-full-panel">
+              <div className="mg-panel-heading"><div><h2>Clinical workflow tools</h2><p>Medication reconciliation, context completeness, department view and smoke evaluation.</p></div><span className="mg-outline-tag">Synthetic demo only</span></div>
+              <div className="mg-safety-note">Workflow prompts only, not clinical advice. Do not use real patient data. Real biometrics and cloud storage require configured providers and are not simulated.</div>
+              <form className="mg-visit-form mg-extension-form" onSubmit={runClinicalReconciliation}><h3>Medication reconciliation</h3>
+                <label htmlFor="mg-clinical-patient">Patient ID (optional)</label><input id="mg-clinical-patient" value={clinicalPatientId} onChange={e=>setClinicalPatientId(e.target.value)} placeholder={selected?.id||"Synthetic patient ID"}/>
+                <div className="mg-visit-form-grid"><div><label htmlFor="mg-clinical-current">Current list (one per line)</label><textarea id="mg-clinical-current" rows="4" value={clinicalCurrent} onChange={e=>setClinicalCurrent(e.target.value)} placeholder={"Medicine A\nMedicine B"}/></div><div><label htmlFor="mg-clinical-proposed">Proposed list (one per line)</label><textarea id="mg-clinical-proposed" rows="4" value={clinicalProposed} onChange={e=>setClinicalProposed(e.target.value)} placeholder={"Medicine A\nMedicine C"}/></div></div>
+                <button className="mg-primary-button" type="submit" disabled={clinicalBusy}>Compare medication lists</button></form>
+              <form className="mg-visit-form mg-extension-form" onSubmit={runClinicalContextReview}><h3>Patient-context completeness review</h3><p className="mg-empty-text">Synthetic context only. This flags missing context and review triggers; it does not calculate doses.</p>
+                <div className="mg-visit-form-grid"><div><label htmlFor="mg-context-age">Age</label><input id="mg-context-age" type="number" min="0" max="125" value={clinicalAge} onChange={e=>setClinicalAge(e.target.value)}/></div><div><label htmlFor="mg-context-egfr">eGFR (optional)</label><input id="mg-context-egfr" type="number" min="0" max="250" value={clinicalEgfr} onChange={e=>setClinicalEgfr(e.target.value)}/></div></div>
+                <label htmlFor="mg-context-pregnancy">Pregnancy status</label><select id="mg-context-pregnancy" value={clinicalPregnancy} onChange={e=>setClinicalPregnancy(e.target.value)}><option value="">Not supplied</option><option value="not pregnant">Not pregnant</option><option value="pregnant">Pregnant</option><option value="not applicable">Not applicable</option><option value="unknown">Unknown</option></select><button className="mg-primary-button" type="submit" disabled={clinicalBusy}>Review context</button></form>
+              {clinicalError&&<div className="mg-error" role="alert">{clinicalError}</div>}
+              {clinicalResult&&<div className="mg-result-panel"><h3>{clinicalResult.type==="reconciliation"?"Reconciliation result":"Context review result"}</h3>{clinicalResult.type==="reconciliation"?<div className="mg-feature-grid">{["added","removed","unchanged"].map(k=><div className="mg-feature-card" key={k}><h4>{k} ({clinicalResult.data[k]?.length||0})</h4>{(clinicalResult.data[k]?.length?clinicalResult.data[k]:["None"]).map((x,i)=><p key={k+i}>{x}</p>)}</div>)}</div>:<>{clinicalResult.data.alerts?.length?clinicalResult.data.alerts.map((a,i)=><div className="mg-manual-review" key={i}><strong>{a.severity}</strong><p>{a.message}</p></div>):<p>No context prompts generated.</p>}<p>{clinicalResult.data.summary}</p></>}<p className="mg-disclaimer">{clinicalResult.data.note||"Synthetic workflow output only; clinician review is required."}</p></div>}
+              <div className="mg-extension-actions"><button className="mg-secondary-button" type="button" onClick={loadClinicalDepartments} disabled={clinicalBusy}>Load department summary</button><button className="mg-primary-button" type="button" onClick={runClinicalEvaluation} disabled={clinicalBusy}>Run synthetic evaluation</button></div>
+              {clinicalDepartments.length>0&&<div className="mg-table-wrap"><table className="mg-patient-table"><thead><tr><th>Department</th><th>Patients</th></tr></thead><tbody>{clinicalDepartments.map(d=><tr key={d.department}><td>{d.department}</td><td>{d.patient_count}</td></tr>)}</tbody></table></div>}
+              {clinicalEvaluation&&<div className="mg-result-panel"><h3>Smoke evaluation: {clinicalEvaluation.passed}/{clinicalEvaluation.total} passed</h3>{clinicalEvaluation.tests?.map(t=><p key={t.name}>{t.passed?"✓":"✕"} {t.name}</p>)}<p className="mg-disclaimer">{clinicalEvaluation.note}</p></div>}
+            </section>
+          )}
+
           {page === "access" && (
 
 
@@ -3581,7 +3610,7 @@ async function runSafetyCheck(event) {
 
                 {qrMessage && <div className="mg-success-message" role="status">{qrMessage}</div>}
 
-                <div className="mg-safety-note">Prototype limitation: this demo has no user login or authorization, so the token is not sufficient for real patient-data security. Do not use real patient information. A production system must enforce authenticated roles, audit access, protect token transport and support consent/revocation.</div>
+                <div className="mg-safety-note">Demo security note: API endpoints must enforce authenticated staff roles on the server. This prototype uses synthetic data only and is not suitable for real patient records. QR tokens are bearer credentials; protect them, revoke them when no longer needed, and use HTTPS in any deployed environment.</div>
 
               </section>
 

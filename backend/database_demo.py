@@ -6,13 +6,13 @@ MedGuard AI — SQLite persistence router for synthetic demo data.
 
 DEMO ONLY:
 
-\- Seeds synthetic patients from data/synthetic_patients_demo.csv.
+- Seeds synthetic patients from data/synthetic_patients_demo.csv.
 
-\- Stores visits and visit medication entries locally in SQLite.
+- Stores visits and visit medication entries locally in SQLite.
 
-\- No authentication/authorization is implemented here.
+- No authentication/authorization is implemented here.
 
-\- Do not store real patient information or deploy this demo as-is.
+- Do not store real patient information or deploy this demo as-is.
 
 """
 

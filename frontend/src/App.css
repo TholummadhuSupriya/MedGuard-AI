@@ -641,3 +641,360 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .mg-qr-image-frame svg { display: block; max-width: 100%; height: auto; }
 .mg-qr-token-block { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .mg-qr-token-block code { max-width: 100%; overflow-wrap: anywhere; }
+
+
+
+/* =========================================
+   MEDGUARD AI — CENTERED SIGN-IN
+   ========================================= */
+
+.mg-login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  padding: 24px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  background:
+    radial-gradient(
+      circle at 15% 15%,
+      rgba(59, 130, 246, 0.22),
+      transparent 38%
+    ),
+    linear-gradient(135deg, #071a35 0%, #102f57 55%, #155eef 100%);
+}
+
+.mg-login-card {
+  width: 100%;
+  max-width: 440px;
+  margin: auto;
+  padding: 36px;
+  box-sizing: border-box;
+  color: #172b4d;
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 20px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+.mg-login-brand {
+  margin-bottom: 32px;
+}
+
+.mg-login-heading {
+  margin-bottom: 24px;
+}
+
+.mg-login-heading .mg-eyebrow {
+  margin: 0 0 8px;
+  color: #155eef;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+
+.mg-login-heading h1 {
+  margin: 0 0 10px;
+  color: #102a4c;
+  font-size: 30px;
+  line-height: 1.25;
+}
+
+.mg-login-heading > p:last-child {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.mg-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mg-login-form label {
+  margin-top: 4px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mg-login-form input {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  box-sizing: border-box;
+  color: #172b4d;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  font: inherit;
+}
+
+.mg-login-form input::placeholder {
+  color: #94a3b8;
+}
+
+.mg-login-form input:focus {
+  outline: 3px solid rgba(21, 94, 239, 0.15);
+  border-color: #155eef;
+}
+
+.mg-login-form .mg-login-button {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+  justify-content: center;
+}
+
+.mg-login-form .mg-login-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.mg-login-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid #e8edf4;
+}
+
+.mg-login-footer .mg-status-dot {
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+
+.mg-login-footer p {
+  margin: 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .mg-login-screen {
+    padding: 16px;
+  }
+
+  .mg-login-card {
+    padding: 24px;
+    border-radius: 16px;
+  }
+
+  .mg-login-heading h1 {
+    font-size: 26px;
+  }
+}
+
+
+
+/* MedGuard AI centered sign-in screen */
+.mg-login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  padding: 24px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  background: linear-gradient(135deg, #071a35, #102f57, #155eef);
+}
+
+.mg-login-card {
+  width: 100%;
+  max-width: 440px;
+  margin: auto;
+  padding: 36px;
+  box-sizing: border-box;
+  color: #172b4d;
+  background: #ffffff;
+  border: 1px solid #dbe5f0;
+  border-radius: 20px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+.mg-login-brand {
+  margin-bottom: 30px;
+}
+
+.mg-login-heading {
+  margin-bottom: 24px;
+}
+
+.mg-login-heading .mg-eyebrow {
+  color: #155eef;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+
+.mg-login-heading h1 {
+  margin: 0 0 10px;
+  color: #102a4c;
+  font-size: 30px;
+}
+
+.mg-login-heading > p:last-child {
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.mg-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mg-login-form label {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mg-login-form input {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  box-sizing: border-box;
+  color: #172b4d;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+}
+
+.mg-login-form input:focus {
+  outline: 3px solid rgba(21, 94, 239, 0.15);
+  border-color: #155eef;
+}
+
+.mg-login-form .mg-login-button {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+}
+
+.mg-login-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid #e8edf4;
+}
+
+.mg-login-footer p {
+  margin: 0;
+  color: #64748b;
+  font-size: 11px;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .mg-login-screen {
+    padding: 16px;
+  }
+
+  .mg-login-card {
+    padding: 24px;
+  }
+
+  .mg-login-heading h1 {
+    font-size: 26px;
+  }
+}
+
+
+
+/* Medication safety analytics */
+.mg-analytics-panel {
+  margin-bottom: 24px;
+}
+
+.mg-analytics-chart {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 14px;
+  min-height: 190px;
+  margin: 24px 0 16px;
+  padding: 16px 12px 8px;
+  border: 1px solid var(--border, #e7e5f2);
+  border-radius: 12px;
+  background: var(--surface, #ffffff);
+}
+
+.mg-analytics-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mg-analytics-day > strong {
+  color: var(--text, #20213a);
+  font-size: 13px;
+}
+
+.mg-analytics-bar-track {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  height: 110px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--page-bg, #f7f7fc);
+}
+
+.mg-analytics-bar {
+  width: min(34px, 70%);
+  min-height: 0;
+  border-radius: 6px 6px 2px 2px;
+  background: linear-gradient(180deg, #4f8cff, #155eef);
+  transition: height 180ms ease;
+}
+
+.mg-analytics-day > span {
+  color: var(--muted, #77768e);
+  font-size: 12px;
+}
+
+.mg-analytics-caption {
+  margin: 0 0 24px;
+  color: var(--muted, #77768e);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+@media (max-width: 600px) {
+  .mg-analytics-chart {
+    gap: 6px;
+    padding-inline: 6px;
+  }
+
+  .mg-analytics-day > span {
+    font-size: 10px;
+  }
+}
+
+/* MedGuard AI remaining workflow features */
+.mg-extension-form,.mg-result-panel{margin-top:18px;padding:20px;border:1px solid var(--border,#e5e7eb);border-radius:14px;background:var(--surface,#fff)}
+.mg-extension-form h3,.mg-result-panel h3{margin:0 0 14px}.mg-extension-form textarea{width:100%;min-height:100px;resize:vertical}
+.mg-extension-form input,.mg-extension-form textarea,.mg-extension-form select{box-sizing:border-box;width:100%;margin:6px 0 14px;padding:11px 12px;border:1px solid var(--border,#dbe2ef);border-radius:9px;font:inherit;background:var(--surface,#fff);color:var(--text,#20213a)}
+.mg-extension-form label{display:block;font-weight:600}.mg-extension-actions{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}
