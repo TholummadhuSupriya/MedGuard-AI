@@ -27,17 +27,38 @@ async function apiFetch(input, options = {}) {
     ? input
     : `${API}${input}`;
 
-  return fetch(url, { ...options, headers });
+  const response = await fetch(url, { ...options, headers });
+
+  // Clear an invalid/expired session instead of repeatedly calling protected APIs.
+  if (response.status === 401) {
+    localStorage.removeItem("medguard_access_token");
+    window.dispatchEvent(new Event("medguard:unauthorized"));
+  }
+
+  return response;
 }
 
 
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(Boolean(localStorage.getItem("medguard_access_token")));
-  const [loginUsername, setLoginUsername] = useState("doctor.demo");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
-  const [loginBusy, setLoginBusy] = useState(false);
+  
+const [loginEmail, setLoginEmail] = useState("");
+const [loginPassword, setLoginPassword] = useState("");
+const [loginError, setLoginError] = useState("");
+const [loginBusy, setLoginBusy] = useState(false);
+
+const [authView, setAuthView] = useState("login");
+const [authMessage, setAuthMessage] = useState("");
+const [authBusy, setAuthBusy] = useState(false);
+
+const [staffName, setStaffName] = useState("");
+const [staffEmail, setStaffEmail] = useState("");
+const [staffDepartment, setStaffDepartment] = useState("");
+const [staffRole, setStaffRole] = useState("doctor");
+const [staffPassword, setStaffPassword] = useState("");
+
+const [verificationCode, setVerificationCode] = useState("");
 
   const [patients, setPatients] = useState([]);
   const [navSearch, setNavSearch] = useState("");
@@ -126,12 +147,12 @@ const [clinicalEvaluation, setClinicalEvaluation] = useState(null);
     setLoginBusy(true);
     setLoginError("");
     setError("");
-    setLoading(true);
+
     try {
       const response = await fetch(`${API}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ username: loginUsername.trim(), password: loginPassword }),
+        body: JSON.stringify({ email: loginEmail.trim().toLowerCase(), password: loginPassword }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.detail || `Login failed (${response.status}).`);
@@ -139,11 +160,66 @@ const [clinicalEvaluation, setClinicalEvaluation] = useState(null);
       localStorage.setItem("medguard_access_token", payload.access_token);
       setIsAuthenticated(true);
       setLoginPassword("");
+      setAuthMessage("");
     } catch (err) {
-      setLoading(false);
       setLoginError(err.message || "Unable to log in.");
     } finally {
       setLoginBusy(false);
+    }
+  }
+
+  async function handleRegister(event) {
+    event.preventDefault();
+    setAuthBusy(true);
+    setAuthMessage("");
+    setLoginError("");
+    try {
+      const response = await fetch(`${API}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          full_name: staffName.trim(),
+          email: staffEmail.trim().toLowerCase(),
+          department: staffDepartment.trim(),
+          role: staffRole,
+          password: staffPassword,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.detail || `Registration failed (${response.status}).`);
+      setLoginEmail(staffEmail.trim().toLowerCase());
+      setAuthView("verify");
+      setAuthMessage(payload?.message || "Registration started. Check your email for the verification code.");
+    } catch (err) {
+      setAuthMessage(err.message || "Unable to register.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleVerifyEmail(event) {
+    event.preventDefault();
+    setAuthBusy(true);
+    setAuthMessage("");
+    try {
+      const email = (staffEmail || loginEmail).trim().toLowerCase();
+      const response = await fetch(`${API}/api/auth/verify-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ email, code: verificationCode.trim() }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.detail || `Email verification failed (${response.status}).`);
+      setLoginEmail(email);
+      setLoginPassword("");
+      setStaffPassword("");
+      setVerificationCode("");
+      setAuthView("login");
+      setAuthMessage(payload?.message || "Email verified. Sign in with your registered email and password.");
+    } catch (err) {
+      setAuthMessage(err.message || "Unable to verify email.");
+    } finally {
+      setAuthBusy(false);
     }
   }
 
@@ -152,8 +228,25 @@ const [clinicalEvaluation, setClinicalEvaluation] = useState(null);
     setIsAuthenticated(false);
     setPatients([]);
     setSelected(null);
+    setAnalytics(null);
     setPage("overview");
   }
+
+  // If any protected API rejects the bearer token, return to login cleanly.
+  useEffect(() => {
+    function handleUnauthorized() {
+      setIsAuthenticated(false);
+      setPatients([]);
+      setSelected(null);
+      setAnalytics(null);
+      setError("");
+      setAnalyticsError("");
+      setLoginError("Your session expired or the token is invalid. Please sign in again.");
+    }
+
+    window.addEventListener("medguard:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("medguard:unauthorized", handleUnauthorized);
+  }, []);
 
   useEffect(() => {
   if (!isAuthenticated) return undefined;
@@ -1043,67 +1136,81 @@ async function runSafetyCheck(event) {
         <section className="mg-login-card">
           <div className="mg-brand mg-login-brand">
             <div className="mg-brand-mark">M</div>
-            <div>
-              <strong>MedGuard AI</strong>
-              <span>Medication safety</span>
-            </div>
+            <div><strong>MedGuard AI</strong><span>Medication safety</span></div>
           </div>
 
-          <div className="mg-login-heading">
-            <p className="mg-eyebrow">SECURE STAFF ACCESS</p>
-            <h1>Welcome back</h1>
-            <p>Sign in to access your medication safety dashboard.</p>
-          </div>
-
-          <form className="mg-visit-form mg-login-form" onSubmit={handleLogin}>
-            <label htmlFor="mg-login-username">Username</label>
-            <input
-              id="mg-login-username"
-              type="text"
-              value={loginUsername}
-              onChange={(event) => setLoginUsername(event.target.value)}
-              autoComplete="username"
-              placeholder="Enter your username"
-              required
-              disabled={loginBusy}
-            />
-
-            <label htmlFor="mg-login-password">Password</label>
-            <input
-              id="mg-login-password"
-              type="password"
-              value={loginPassword}
-              onChange={(event) => setLoginPassword(event.target.value)}
-              autoComplete="current-password"
-              placeholder="Enter your password"
-              required
-              disabled={loginBusy}
-            />
-
-            {loginError && (
-              <div className="mg-error" role="alert">
-                {loginError}
+          {authView === "login" && (
+            <>
+              <div className="mg-login-heading">
+                <p className="mg-eyebrow">SECURE STAFF ACCESS</p>
+                <h1>Welcome back</h1>
+                <p>Sign in with your registered email address.</p>
               </div>
-            )}
+              <form className="mg-visit-form mg-login-form" onSubmit={handleLogin}>
+                <label htmlFor="mg-login-email">Email address</label>
+                <input id="mg-login-email" type="email" value={loginEmail}
+                  onChange={(event) => setLoginEmail(event.target.value)} autoComplete="username"
+                  placeholder="you@hospital.com" required disabled={loginBusy} />
+                <label htmlFor="mg-login-password">Password</label>
+                <input id="mg-login-password" type="password" value={loginPassword}
+                  onChange={(event) => setLoginPassword(event.target.value)} autoComplete="current-password"
+                  required disabled={loginBusy} />
+                {loginError && <div className="mg-error" role="alert">{loginError}</div>}
+                {authMessage && <p role="status">{authMessage}</p>}
+                <button className="mg-primary-button mg-login-button" type="submit" disabled={loginBusy}>
+                  {loginBusy ? "Signing in..." : "Sign in"}
+                </button>
+              </form>
+              <p>New staff member? <button type="button" onClick={() => { setAuthView("register"); setAuthMessage(""); setLoginError(""); }}>Create an account</button></p>
+            </>
+          )}
 
-            <button
-              className="mg-primary-button mg-login-button"
-              type="submit"
-              disabled={loginBusy}
-            >
-              {loginBusy ? "Signing in..." : "Sign in"}
-            </button>
-          </form>
+          {authView === "register" && (
+            <>
+              <div className="mg-login-heading"><h1>Create staff account</h1><p>Register using your work email.</p></div>
+              <form className="mg-visit-form mg-login-form" onSubmit={handleRegister}>
+                <label htmlFor="mg-staff-name">Full name</label>
+                <input id="mg-staff-name" value={staffName} onChange={(e) => setStaffName(e.target.value)} autoComplete="name" required />
+                <label htmlFor="mg-staff-email">Work email</label>
+                <input id="mg-staff-email" type="email" value={staffEmail} onChange={(e) => setStaffEmail(e.target.value)} autoComplete="email" required />
+                <label htmlFor="mg-staff-department">Department</label>
+                <input id="mg-staff-department" value={staffDepartment} onChange={(e) => setStaffDepartment(e.target.value)} placeholder="e.g. Pharmacy" required />
+                <label htmlFor="mg-staff-role">Staff role</label>
+                <select id="mg-staff-role" value={staffRole} onChange={(e) => setStaffRole(e.target.value)} required>
+                  <option value="doctor">Doctor</option><option value="nurse">Nurse</option><option value="pharmacist">Pharmacist</option>
+                </select>
+                <label htmlFor="mg-staff-password">Password</label>
+                <input id="mg-staff-password" type="password" value={staffPassword} onChange={(e) => setStaffPassword(e.target.value)} autoComplete="new-password" minLength={12} required />
+                {authMessage && <div className="mg-error" role="alert">{authMessage}</div>}
+                <button className="mg-primary-button" type="submit" disabled={authBusy}>{authBusy ? "Registering..." : "Register and send code"}</button>
+              </form>
+              <button type="button" onClick={() => { setAuthView("login"); setAuthMessage(""); }}>Back to sign in</button>
+            </>
+          )}
 
-          <div className="mg-login-footer">
-            <span className="mg-status-dot" />
-            <p>Local demo environment. Synthetic patient data only.</p>
-          </div>
+          {authView === "verify" && (
+            <>
+              <div className="mg-login-heading"><h1>Verify your email</h1><p>Enter the verification code sent to {staffEmail || loginEmail}.</p></div>
+              <form className="mg-visit-form mg-login-form" onSubmit={handleVerifyEmail}>
+                <label htmlFor="mg-verification-code">Verification code</label>
+                <input id="mg-verification-code" inputMode="numeric" autoComplete="one-time-code"
+                  pattern="[0-9]{6}" maxLength={6} value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="6-digit code" required />
+                {authMessage && <div role="status" aria-live="polite">{authMessage}</div>}
+                <button className="mg-primary-button" type="submit" disabled={authBusy || verificationCode.length !== 6}>
+                  {authBusy ? "Verifying..." : "Verify email"}
+                </button>
+              </form>
+              <button type="button" onClick={() => { setAuthView("register"); setAuthMessage(""); setVerificationCode(""); }}>Back to registration</button>
+            </>
+          )}
+
+          <div className="mg-login-footer"><span className="mg-status-dot" /><p>Synthetic demo environment. Do not enter real patient data.</p></div>
         </section>
       </div>
     );
   }
-
 
 
   async function runClinicalReconciliation(event) {
@@ -1397,7 +1504,7 @@ async function runSafetyCheck(event) {
 
 
 
-                      : page === "clinical" ? "Clinical Workflow Tools" : page === "clinical" ? "Clinical Workflow Tools" : "QR & Identity Access"}
+                      : page === "clinical" ? "Clinical Workflow Tools" : "QR & Identity Access"}
 
 
 

@@ -1,8 +1,5 @@
-"""MedGuard AI staff authentication helpers — local synthetic demo only.
 
-Uses a short-lived HMAC-signed bearer token and demo staff accounts configured
-through environment variables. This is a learning scaffold, not production IAM.
-"""
+"""MedGuard AI: staff registration, email verification and login."""
 from __future__ import annotations
 
 import base64
@@ -10,162 +7,414 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
+import smtplib
+import sqlite3
 import time
+from datetime import datetime, timezone
+from email.message import EmailMessage
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
-security = HTTPBearer(
-    scheme_name="BearerAuth",
-    description="Enter your MedGuard staff access token"
-)
 from dotenv import load_dotenv
-from pathlib import Path
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, EmailStr, Field
 
-load_dotenv(Path(__file__).resolve().parent / ".env")
-router = APIRouter(prefix="/api/auth", tags=["Demo staff authentication"])
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
+DB_PATH = BASE_DIR / "medguard_demo.db"
 
-# Configure these environment variables before enabling authentication.
-# Passwords are deliberately not hard-coded into the source file.
-DEMO_USERS = {
-    "doctor.demo": {
-        "password_env": "MEDGUARD_DOCTOR_PASSWORD",
-        "role": "doctor",
-    },
-    "nurse.demo": {
-        "password_env": "MEDGUARD_NURSE_PASSWORD",
-        "role": "nurse",
-    },
-    "pharmacist.demo": {
-        "password_env": "MEDGUARD_PHARMACIST_PASSWORD",
-        "role": "pharmacist",
-    },
-    "admin.demo": {
-        "password_env": "MEDGUARD_ADMIN_PASSWORD",
-        "role": "admin",
-    },
-}
-TOKEN_SECRET_ENV = "MEDGUARD_TOKEN_SECRET"
-TOKEN_TTL_SECONDS = 60 * 60
+router = APIRouter(prefix="/api/auth", tags=["Staff authentication"])
+security = HTTPBearer()
+TOKEN_TTL_SECONDS = 3600
+SELF_REGISTER_ROLES = {"doctor", "nurse", "pharmacist"}
+
+
+def connect():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def initialize_auth_tables():
+    with connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS staff_users (
+                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                full_name TEXT NOT NULL,
+                department TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(
+                    role IN ('doctor','nurse','pharmacist','admin')
+                ),
+                password_hash TEXT NOT NULL,
+                email_verified INTEGER NOT NULL DEFAULT 0,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS email_verification_codes (
+                email TEXT PRIMARY KEY COLLATE NOCASE,
+                code_hash TEXT NOT NULL,
+                expires_at INTEGER NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            )
+        """)
+
+
+def b64e(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode()
+
+
+def b64d(value: str) -> bytes:
+    return base64.urlsafe_b64decode(
+        value + "=" * (-len(value) % 4)
+    )
+
+
+def token_secret() -> bytes:
+    secret = os.getenv("MEDGUARD_TOKEN_SECRET", "")
+    if len(secret) < 32:
+        raise HTTPException(
+            status_code=503,
+            detail="Server token secret is not configured correctly."
+        )
+    return secret.encode()
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    hashed = hashlib.scrypt(
+        password.encode(), salt=salt,
+        n=2**14, r=8, p=1, dklen=32
+    )
+    return f"scrypt${b64e(salt)}${b64e(hashed)}"
+
+
+def check_password(password: str, stored: str) -> bool:
+    try:
+        scheme, salt, expected = stored.split("$", 2)
+        if scheme != "scrypt":
+            return False
+        actual = hashlib.scrypt(
+            password.encode(), salt=b64d(salt),
+            n=2**14, r=8, p=1, dklen=32
+        )
+        return hmac.compare_digest(b64e(actual), expected)
+    except (ValueError, TypeError):
+        return False
+
+
+def send_verification_email(email: str, code: str):
+    host = os.getenv("SMTP_HOST", "").strip()
+    sender = os.getenv("SMTP_FROM", "").strip()
+    port = int(os.getenv("SMTP_PORT", "587"))
+    username = os.getenv("SMTP_USERNAME", "")
+    password = os.getenv("SMTP_PASSWORD", "")
+
+    if not host or not sender:
+        raise HTTPException(
+            status_code=503,
+            detail="Email is not configured. Set the SMTP variables in backend/.env."
+        )
+
+    message = EmailMessage()
+    message["Subject"] = "Verify your MedGuard AI work email"
+    message["From"] = sender
+    message["To"] = email
+    message.set_content(
+        f"Your verification code is {code}. "
+        "It expires in 10 minutes."
+    )
+
+    try:
+        with smtplib.SMTP(host, port, timeout=15) as smtp:
+            smtp.starttls()
+            if username:
+                smtp.login(username, password)
+            smtp.send_message(message)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Could not send verification email. Check SMTP settings."
+        ) from exc
+
+
+class RegisterRequest(BaseModel):
+    full_name: str = Field(min_length=2, max_length=100)
+    email: EmailStr
+    department: str = Field(min_length=2, max_length=100)
+    role: str
+    password: str = Field(min_length=12, max_length=128)
+
+
+class VerifyEmailRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(pattern=r"^[0-9]{6}$")
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=80)
-    password: str = Field(min_length=1, max_length=200)
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
 
 
-def _b64encode(raw: bytes) -> str:
-    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
-
-
-def _b64decode(value: str) -> bytes:
-    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
-
-
-def _secret() -> bytes:
-    value = os.getenv(TOKEN_SECRET_ENV, "")
-    if len(value) < 32:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Configure {TOKEN_SECRET_ENV} with a random secret of at least 32 characters.",
-        )
-    return value.encode("utf-8")
-
-
-def issue_token(username: str, role: str) -> str:
+def issue_token(user: sqlite3.Row) -> str:
     now = int(time.time())
     payload = {
-        "sub": username,
-        "role": role,
+        "sub": user["email"],
+        "role": user["role"],
         "iat": now,
         "exp": now + TOKEN_TTL_SECONDS,
         "iss": "medguard-demo",
     }
-    body = _b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
-    signature = hmac.new(_secret(), body.encode("ascii"), hashlib.sha256).digest()
-    return f"{body}.{_b64encode(signature)}"
+    body = b64e(
+        json.dumps(payload, separators=(",", ":")).encode()
+    )
+    signature = hmac.new(
+        token_secret(), body.encode(), hashlib.sha256
+    ).digest()
+    return f"{body}.{b64e(signature)}"
 
 
 def verify_token(token: str) -> dict[str, Any]:
     try:
-        body, signature_text = token.split(".", 1)
-        supplied_signature = _b64decode(signature_text)
-        expected_signature = hmac.new(
-            _secret(), body.encode("ascii"), hashlib.sha256
+        body, signature = token.split(".", 1)
+        expected = hmac.new(
+            token_secret(), body.encode(), hashlib.sha256
         ).digest()
-        if not hmac.compare_digest(supplied_signature, expected_signature):
-            raise ValueError("bad signature")
-        payload = json.loads(_b64decode(body))
+
+        if not hmac.compare_digest(b64d(signature), expected):
+            raise ValueError("Invalid signature")
+
+        payload = json.loads(b64d(body))
         if payload.get("iss") != "medguard-demo":
-            raise ValueError("bad issuer")
+            raise ValueError("Invalid issuer")
         if int(payload.get("exp", 0)) <= int(time.time()):
-            raise ValueError("expired")
-        username = payload.get("sub")
-        role = payload.get("role")
-        configured = DEMO_USERS.get(username)
-        if not configured or configured["role"] != role:
-            raise ValueError("unknown user or role")
+            raise ValueError("Expired token")
+
+        with connect() as conn:
+            user = conn.execute(
+                """SELECT email, role, email_verified, active
+                   FROM staff_users WHERE email = ? COLLATE NOCASE""",
+                (payload.get("sub"),)
+            ).fetchone()
+
+        if (
+            not user
+            or not user["active"]
+            or not user["email_verified"]
+            or user["role"] != payload.get("role")
+        ):
+            raise ValueError("Account is not active or verified")
+
         return payload
     except HTTPException:
         raise
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired staff token.")
-
+    except Exception as exc:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired staff token."
+        ) from exc
 
 
 def get_current_staff(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> dict[str, Any]:
+):
     return verify_token(credentials.credentials)
 
 
-def require_role(staff: dict[str, Any], allowed_roles: set[str]) -> None:
-    if staff.get("role") not in allowed_roles:
-        raise HTTPException(
-            status_code=403,
-            detail="Your staff role is not allowed to perform this action.",
-        )
+def allow_roles(*roles: str):
+    allowed = set(roles)
 
-
-def allow_roles(*allowed_roles: str):
-    """FastAPI dependency factory enforcing staff roles on a route."""
-    allowed = set(allowed_roles)
-
-    def _role_guard(
-        staff: dict[str, Any] = Depends(get_current_staff),
-    ) -> dict[str, Any]:
-        require_role(staff, allowed)
+    def guard(staff: dict = Depends(get_current_staff)):
+        if staff.get("role") not in allowed:
+            raise HTTPException(
+                status_code=403,
+                detail="Your staff role cannot access this resource."
+            )
         return staff
 
-    return _role_guard
+    return guard
+
+
+initialize_auth_tables()
+
+
+@router.post("/register", status_code=202)
+def register(body: RegisterRequest):
+    email = str(body.email).strip().lower()
+    role = body.role.strip().lower()
+
+    # Admin can NEVER be assigned through public registration.
+    if role not in SELF_REGISTER_ROLES:
+        raise HTTPException(
+            status_code=400,
+            detail="Choose doctor, nurse, or pharmacist. "
+                   "Admin accounts must be provisioned separately."
+        )
+
+    if (
+        not any(c.isalpha() for c in body.password)
+        or not any(c.isdigit() for c in body.password)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must contain letters and numbers."
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    code = f"{secrets.randbelow(1_000_000):06d}"
+
+    with connect() as conn:
+        existing = conn.execute(
+            "SELECT email_verified FROM staff_users "
+            "WHERE email = ? COLLATE NOCASE",
+            (email,)
+        ).fetchone()
+
+        if existing and existing["email_verified"]:
+            raise HTTPException(
+                status_code=409,
+                detail="An account already exists for this email."
+            )
+
+        conn.execute(
+            """INSERT INTO staff_users
+               (email, full_name, department, role, password_hash,
+                email_verified, active, created_at)
+               VALUES (?, ?, ?, ?, ?, 0, 1, ?)
+               ON CONFLICT(email) DO UPDATE SET
+                 full_name=excluded.full_name,
+                 department=excluded.department,
+                 role=excluded.role,
+                 password_hash=excluded.password_hash,
+                 email_verified=0, active=1""",
+            (
+                email, body.full_name.strip(),
+                body.department.strip(), role,
+                hash_password(body.password), now
+            )
+        )
+        conn.execute(
+            """INSERT INTO email_verification_codes
+               (email, code_hash, expires_at, attempts, created_at)
+               VALUES (?, ?, ?, 0, ?)
+               ON CONFLICT(email) DO UPDATE SET
+                 code_hash=excluded.code_hash,
+                 expires_at=excluded.expires_at,
+                 attempts=0, created_at=excluded.created_at""",
+            (
+                email, hashlib.sha256(code.encode()).hexdigest(),
+                int(time.time()) + 600, now
+            )
+        )
+
+    try:
+        send_verification_email(email, code)
+    except HTTPException:
+        # Do not leave an unusable pending registration behind.
+        with connect() as conn:
+            conn.execute(
+                "DELETE FROM email_verification_codes WHERE email=?",
+                (email,)
+            )
+            conn.execute(
+                "DELETE FROM staff_users WHERE email=? AND email_verified=0",
+                (email,)
+            )
+        raise
+
+    return {
+        "message": "Verification code sent. It expires in 10 minutes.",
+        "email": email
+    }
+
+
+@router.post("/verify-email")
+def verify_email(body: VerifyEmailRequest):
+    email = str(body.email).strip().lower()
+
+    with connect() as conn:
+        row = conn.execute(
+            """SELECT code_hash, expires_at, attempts
+               FROM email_verification_codes
+               WHERE email=? COLLATE NOCASE""",
+            (email,)
+        ).fetchone()
+
+        if (
+            not row
+            or row["expires_at"] < int(time.time())
+            or row["attempts"] >= 5
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Code invalid or expired. Register again."
+            )
+
+        supplied = hashlib.sha256(body.code.encode()).hexdigest()
+        if not hmac.compare_digest(supplied, row["code_hash"]):
+            conn.execute(
+                "UPDATE email_verification_codes "
+                "SET attempts=attempts+1 WHERE email=?",
+                (email,)
+            )
+            raise HTTPException(
+                status_code=400,
+                detail="Incorrect verification code."
+            )
+
+        conn.execute(
+            "UPDATE staff_users SET email_verified=1 WHERE email=?",
+            (email,)
+        )
+        conn.execute(
+            "DELETE FROM email_verification_codes WHERE email=?",
+            (email,)
+        )
+
+    return {"message": "Email verified. You can now sign in."}
 
 
 @router.post("/login")
 def login(body: LoginRequest):
-    user = DEMO_USERS.get(body.username)
-    expected_password = os.getenv(user["password_env"], "") if user else ""
-    # Do not accept login until all demo credentials and the signing secret are configured.
-    if not expected_password or not hmac.compare_digest(body.password, expected_password):
-        raise HTTPException(status_code=401, detail="Invalid demo staff username or password.")
-    token = issue_token(body.username, user["role"])
+    email = str(body.email).strip().lower()
+
+    with connect() as conn:
+        user = conn.execute(
+            "SELECT * FROM staff_users WHERE email=? COLLATE NOCASE",
+            (email,)
+        ).fetchone()
+
+    if not user or not check_password(body.password, user["password_hash"]):
+        raise HTTPException(401, "Invalid email or password.")
+
+    if not user["email_verified"]:
+        raise HTTPException(403, "Verify your work email before signing in.")
+
+    if not user["active"]:
+        raise HTTPException(403, "Account disabled. Contact the administrator.")
+
     return {
-        "access_token": token,
+        "access_token": issue_token(user),
         "token_type": "bearer",
         "expires_in": TOKEN_TTL_SECONDS,
-        "staff": {"username": body.username, "role": user["role"]},
-        "synthetic_demo_only": True,
+        "staff": {
+            "email": user["email"],
+            "full_name": user["full_name"],
+            "department": user["department"],
+            "role": user["role"]
+        }
     }
 
 
-
 @router.get("/me")
-def who_am_i(
-    staff: dict[str, Any] = Depends(get_current_staff),
-):
+def who_am_i(staff: dict = Depends(get_current_staff)):
     return {
-        "username": staff["sub"],
+        "email": staff["sub"],
         "role": staff["role"],
-        "expires_at_epoch": staff["exp"],
-        "synthetic_demo_only": True,
+        "expires_at_epoch": staff["exp"]
     }
